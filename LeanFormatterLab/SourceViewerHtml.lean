@@ -67,6 +67,7 @@ def sourceViewerCss : String :=
     ".badge.expr-missing{border-color:var(--dm);color:var(--dm);}" ++
     ".primaryBox{border-color:#3d4f3d;background:#101812;}" ++
     ".contextBox{border-color:#303044;background:#101018;}" ++
+    ".ctxDetails summary{cursor:pointer;color:var(--ac);font-family:'Syne',sans-serif;font-weight:800;font-size:.65rem;letter-spacing:.06em;margin-bottom:.35rem;}" ++
     ".box{border:1px solid var(--bd);border-radius:8px;background:#11111a;padding:.6rem .7rem;margin-top:.7rem;}" ++
     ".boxTitle{font-family:'Syne',sans-serif;color:var(--ac);font-weight:800;font-size:.65rem;letter-spacing:.06em;margin-bottom:.35rem;}" ++
     ".score{color:var(--ch);font-weight:700;}" ++
@@ -272,6 +273,10 @@ def sourceViewerJs : String :=
       "return infos.length>0?'expr-linked':'expr-missing';" ++
     "}" ++
 
+    "function isHiddenSourceToken(t){" ++
+      "return t.label==='[anonymous]' || t.parentKey==='node|hygieneInfo|' || t.key==='ident||[anonymous]';" ++
+    "}" ++
+
     "function interpretationForToken(t,cands,infos){" ++
       "const hasRange=t.start!=null && t.end!=null;" ++
       "const primary=infos.length>0?infos[0]:null;" ++
@@ -299,7 +304,7 @@ def sourceViewerJs : String :=
     "function renderSource(){" ++
       "const el=document.getElementById('sourceLine');" ++
       "el.innerHTML='';" ++
-      "surfaceLeaves.forEach(t=>{" ++
+      "surfaceLeaves.filter(t=>!isHiddenSourceToken(t)).forEach(t=>{" ++
         "const span=document.createElement('span');" ++
         "span.className=tokenClass(t);" ++
         "span.textContent=t.shortLabel;" ++
@@ -353,8 +358,8 @@ def sourceViewerJs : String :=
       "}" ++
       "h+='</div>';" ++
 
-      "const parents=infos.slice(1,6);" ++
-      "h+='<div class=\"box contextBox\"><div class=\"boxTitle\">Parent Expr contexts</div>';" ++
+      "const parents=infos.slice(1,4);" ++
+      "h+='<div class=\"box contextBox\"><div class=\"boxTitle\">Parent Expr contexts (top 3)</div>';" ++
       "if(parents.length===0){" ++
         "h+='<div class=\"v\">No parent TermInfo contexts.</div>';" ++
       "}else{" ++
