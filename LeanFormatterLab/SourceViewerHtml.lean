@@ -327,7 +327,7 @@ def sourceViewerJs : String :=
     "  h+='<div class=\"k\">SourceInfo</div><div class=\"v\">start='+escapeHtml(String(t.start))+', end='+escapeHtml(String(t.end))+'</div></div></div>';\n" ++
     "  h+='<div class=\"box primaryBox\"><div class=\"boxTitle\">Primary Expr relation</div>';\n" ++
     "  if(primary==null){h+='<div class=\"v\"><span class=\"warn\">No direct TermInfo found.</span><br>この token の SourceInfo range を含む TermInfo は見つかりませんでした。</div>';}\n" ++
-    "  else{h+=renderInfoDetails(primary,'primary');}\n" ++
+    "  else{h+=renderInfoDetails(primary,'primary'); if(primary.start!==t.start || primary.end!==t.end){h+='<div class=\"box\" style=\"margin-top:.5rem\"><div class=\"boxTitle\">Range note</div><div class=\"v\">この token 単体に対応する TermInfo ではなく、token を含む親 TermInfo に接続されています。例: 記号 token や括弧は、親の term 全体の Expr に対応することがあります。</div></div>';}}\n" ++
     "  h+='</div>';\n" ++
     "  const parents=infos.slice(1,4);\n" ++
     "  h+='<div class=\"box contextBox\"><div class=\"boxTitle\">Parent Expr contexts (top 3)</div>';\n" ++
@@ -366,6 +366,8 @@ def sourceViewerJs : String :=
     "  {selector:'node[phase=\"info\"]',style:{'background-color':'#1d1a08','border-color':'#f9e2af','shape':'hexagon','text-halign':'center'}},\n" ++
     "  {selector:'node[role=\"primary\"]',style:{'border-width':5,'border-color':'#f9e2af'}},\n" ++
     "  {selector:'node[role=\"context\"]',style:{'border-style':'dashed','opacity':0.86}},\n" ++
+    "  {selector:'node[role=\"header\"]',style:{'background-color':'#0a0a0f','border-width':0,'shape':'round-rectangle','color':'#585b70','font-size':'10px','font-family':'Syne','font-weight':800,'text-valign':'center','text-halign':'center'}},\n" ++
+    "  {selector:'node[phase=\"missing\"]',style:{'background-color':'#171018','border-color':'#f38ba8','border-style':'dashed','shape':'round-rectangle','color':'#f38ba8'}},\n" ++
     "  {selector:'node[phase=\"delab\"]',style:{'background-color':'#0a2518','border-color':'#a6e3a1','text-halign':'left','text-margin-x':8}},\n" ++
     "  {selector:'node[diff=\"removed\"]',style:{'background-color':'#301018','border-color':'#f38ba8','border-width':4}},\n" ++
     "  {selector:'node[diff=\"added\"]',style:{'background-color':'#0e2d18','border-color':'#a6e3a1','border-width':4}},\n" ++
@@ -406,18 +408,40 @@ def sourceViewerJs : String :=
     "    if(noteEl)noteEl.textContent='Graph render error: '+e.message;\n" ++
     "  }\n" ++
     "}\n" ++
+    "function infoNodeLabel(info,role){\n" ++
+    "  const head=role==='primary'?'Expr':'Context';\n" ++
+    "  const expr=short(info.expr||info.syntax||'?',16);\n" ++
+    "  const ty=short(info.type||'?',10);\n" ++
+    "  return head+'\\n'+expr+'\\n: '+ty;\n" ++
+    "}\n" ++
+    "function headerNode(id,label,x){\n" ++
+    "  return {data:{id,label,phase:'header',role:'header',diff:'header'},position:{x,y:70}};\n" ++
+    "}\n" ++
     "function infoNodeData(info,id,x,y,role){\n" ++
-    "  return {data:{id,label:short((role==='primary'?'Primary ':'Context ')+(info.expr||info.syntax||'TermInfo')+' : '+(info.type||'?'),30),fullLabel:info.expr||info.syntax||'TermInfo',phase:'info',role,kind:info.kind||'TermInfo',syntax:info.syntax||'',elaborator:info.elaborator||'',expr:info.expr||'',type:info.type||'',expected:info.expected||'',start:info.start,end:info.end,path:id,diff:'info'},position:{x,y}};\n" ++
+    "  return {data:{id,label:infoNodeLabel(info,role),fullLabel:info.expr||info.syntax||'TermInfo',phase:'info',role,kind:info.kind||'TermInfo',syntax:info.syntax||'',elaborator:info.elaborator||'',expr:info.expr||'',type:info.type||'',expected:info.expected||'',start:info.start,end:info.end,path:id,diff:'info'},position:{x,y}};\n" ++
     "}\n" ++
     "function buildFocusGraph(t){\n" ++
     "  const infos=termInfosForToken(t); const primary=infos[0]||null; const parents=infos.slice(1,3); const cands=candidatesForToken(t).slice(0,1);\n" ++
     "  let nodes=[]; let edges=[];\n" ++
+    "  nodes.push(headerNode('hSurface','Surface token',120));\n" ++
+    "  nodes.push(headerNode('hExpr','InfoTree / Expr',430));\n" ++
+    "  nodes.push(headerNode('hDelab','Delab candidate',760));\n" ++
     "  nodes.push({data:{id:'fs',label:short(t.label,18),fullLabel:t.label,phase:'surface',type:t.type||'',kind:t.kind||'',val:t.val||'',diff:t.status==='lost'?'removed':'same',path:t.path,start:t.start,end:t.end},position:{x:120,y:220}});\n" ++
     "  if(primary){\n" ++
     "    nodes.push(infoNodeData(primary,'fi0',430,180,'primary'));\n" ++
-    "    edges.push({data:{id:'fs_fi0',source:'fs',target:'fi0',kind:'s2i',label:'elab'}});\n" ++
-    "    parents.forEach((p,i)=>{const id='fc'+i; nodes.push(infoNodeData(p,id,430,300+i*92,'context')); edges.push({data:{id:'fi0_'+id,source:'fi0',target:id,kind:'ctx',label:'ctx'}});});\n" ++
-    "    cands.forEach((c,i)=>{const id='fd'+i; nodes.push({data:{id,label:short(c.label,18),fullLabel:c.label,phase:'delab',type:c.type||'',kind:c.kind||'',val:c.val||'',diff:c.status==='synthetic'?'added':'same',path:c.path,start:c.start,end:c.end,score:c.score},position:{x:760,y:180+i*100}}); edges.push({data:{id:'fi0_'+id,source:'fi0',target:id,kind:'i2d',label:String(c.score)}});});\n" ++
+    "    const exact=(primary.start===t.start && primary.end===t.end);\n" ++
+    "    edges.push({data:{id:'fs_fi0',source:'fs',target:'fi0',kind:'s2i',label:exact?'elab':'parent elab'}});\n" ++
+    "    parents.forEach((p,i)=>{const id='fc'+i; nodes.push(infoNodeData(p,id,430,315+i*105,'context')); edges.push({data:{id:'fi0_'+id,source:'fi0',target:id,kind:'ctx',label:'ctx'}});});\n" ++
+    "    if(cands.length===0){\n" ++
+    "      nodes.push({data:{id:'fdMissing',label:'No delab\\ncandidate',fullLabel:'No delab candidate',phase:'missing',diff:'missing'},position:{x:760,y:180}});\n" ++
+    "      edges.push({data:{id:'fi0_fdMissing',source:'fi0',target:'fdMissing',kind:'i2d',label:'none'}});\n" ++
+    "    }else{\n" ++
+    "      cands.forEach((c,i)=>{const id='fd'+i; nodes.push({data:{id,label:short(c.label,18),fullLabel:c.label,phase:'delab',type:c.type||'',kind:c.kind||'',val:c.val||'',diff:c.status==='synthetic'?'added':'same',path:c.path,start:c.start,end:c.end,score:c.score},position:{x:760,y:180+i*100}}); edges.push({data:{id:'fi0_'+id,source:'fi0',target:id,kind:'i2d',label:String(c.score)}});});\n" ++
+    "    }\n" ++
+    "  }else{\n" ++
+    "    nodes.push({data:{id:'fiMissing',label:'No TermInfo',fullLabel:'No TermInfo',phase:'missing',diff:'missing'},position:{x:430,y:180}});\n" ++
+    "    edges.push({data:{id:'fs_fiMissing',source:'fs',target:'fiMissing',kind:'s2i',label:'none'}});\n" ++
+    "    nodes.push({data:{id:'fdMissing',label:'No delab\\ncandidate',fullLabel:'No delab candidate',phase:'missing',diff:'missing'},position:{x:760,y:180}});\n" ++
     "  }\n" ++
     "  return {elements:[...nodes,...edges],note:'Focus graph: selected token = '+t.label};\n" ++
     "}\n" ++
