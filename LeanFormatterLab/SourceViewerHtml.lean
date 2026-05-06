@@ -158,6 +158,7 @@ def sourceViewerBody : String :=
 
 def sourceViewerJs : String :=
     "const D=window.LEAN_DATA;" ++
+    "const termInfos=D.termInfos||[];" ++
     "document.getElementById('td').textContent=D.term||'';" ++
     "document.getElementById('termPreview').textContent=D.term||'';" ++
     "document.getElementById('exprText').textContent=D.phase2||'';" ++
@@ -238,6 +239,13 @@ def sourceViewerJs : String :=
     "const surfaceLeaves=collectLeaves(D.tree1,'surface',dKeys);" ++
     "const delabLeaves=collectLeaves(D.tree3,'delab',sKeys);" ++
 
+    "function termInfosForToken(t){" ++
+      "return termInfos.filter(info=>" ++
+        "info.start!=null && info.end!=null && t.start!=null && t.end!=null && " ++
+        "info.start<=t.start && t.end<=info.end" ++
+      ").sort((a,b)=>((a.end-a.start)-(b.end-b.start)));" ++
+    "}" ++
+
     "function candidatesForToken(t){" ++
       "const pool=delabLeaves.filter(d=>d.label===t.label || d.key===t.key);" ++
       "return pool.map(d=>Object.assign({},d,{score:scoreCandidate(t,d)})).sort((a,b)=>b.score-a.score).slice(0,5);" ++
@@ -285,6 +293,7 @@ def sourceViewerJs : String :=
 
     "function metaHtml(t){" ++
       "const cands=candidatesForToken(t);" ++
+      "const infos=termInfosForToken(t);" ++
       "const badge='<span class=\"badge '+t.status+'\">'+t.status+'</span>';" ++
       "let h='';" ++
       "h+=badge;" ++
@@ -310,8 +319,21 @@ def sourceViewerJs : String :=
       "}" ++
       "h+='</div>';" ++
 
-      "h+='<div class=\"box\"><div class=\"boxTitle\">Expr relation</div>';" ++
-      "h+='<div class=\"v\"><span class=\"warn\">exact Source ↔ Expr ↔ Delab trace: not available in this prototype.</span><br>現在は Surface leaf と Delaborated leaf の candidate を score で推定しています。厳密対応は info tree / term info を使う次段階の課題です。</div>';" ++
+      "h+='<div class=\"box\"><div class=\"boxTitle\">Expr relation from InfoTree</div>';" ++
+      "if(infos.length===0){" ++
+        "h+='<div class=\"v\"><span class=\"warn\">No TermInfo found for this token range.</span><br>この token の SourceInfo range に対応する TermInfo は見つかりませんでした。</div>';" ++
+      "}else{" ++
+        "infos.slice(0,5).forEach((info,i)=>{" ++
+          "h+='<div class=\"kv\"><div class=\"k\">info '+(i+1)+'</div><div class=\"v\">';" ++
+          "h+='range='+escapeHtml(String(info.start))+'..'+escapeHtml(String(info.end));" ++
+          "h+='<br>syntax='+escapeHtml(info.syntax||'');" ++
+          "h+='<br>elaborator='+escapeHtml(info.elaborator||'');" ++
+          "h+='<br>expr='+escapeHtml(info.expr||'');" ++
+          "h+='<br>type='+escapeHtml(info.type||'');" ++
+          "h+='<br>expected='+escapeHtml(info.expected||'');" ++
+          "h+='</div></div>';" ++
+        "});" ++
+      "}" ++
       "h+='</div>';" ++
 
       "h+='<div class=\"box\"><div class=\"boxTitle\">Interpretation</div>';" ++
