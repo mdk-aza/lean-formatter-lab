@@ -61,6 +61,12 @@ def sourceViewerCss : String :=
     ".badge.preserved{border-color:var(--p1);color:var(--p1);}" ++
     ".badge.lost{border-color:var(--rm);color:var(--rm);}" ++
     ".badge.synthetic{border-color:var(--ad);color:var(--ad);}" ++
+    ".badge.delab-missing{border-color:var(--rm);color:var(--rm);}" ++
+    ".badge.delab-candidate{border-color:var(--ch);color:var(--ch);}" ++
+    ".badge.expr-linked{border-color:var(--ad);color:var(--ad);}" ++
+    ".badge.expr-missing{border-color:var(--dm);color:var(--dm);}" ++
+    ".primaryBox{border-color:#3d4f3d;background:#101812;}" ++
+    ".contextBox{border-color:#303044;background:#101018;}" ++
     ".box{border:1px solid var(--bd);border-radius:8px;background:#11111a;padding:.6rem .7rem;margin-top:.7rem;}" ++
     ".boxTitle{font-family:'Syne',sans-serif;color:var(--ac);font-weight:800;font-size:.65rem;letter-spacing:.06em;margin-bottom:.35rem;}" ++
     ".score{color:var(--ch);font-weight:700;}" ++
@@ -251,24 +257,40 @@ def sourceViewerJs : String :=
       "return pool.map(d=>Object.assign({},d,{score:scoreCandidate(t,d)})).sort((a,b)=>b.score-a.score).slice(0,5);" ++
     "}" ++
 
-    "function interpretationForToken(t,cands){" ++
+    "function primaryInfoForToken(t){" ++
+      "const infos=termInfosForToken(t);" ++
+      "return infos.length>0?infos[0]:null;" ++
+    "}" ++
+
+    "function delabStatusLabel(t,cands){" ++
+      "if(t.status==='lost') return cands.length>0?'delab-candidate':'delab-missing';" ++
+      "if(t.status==='synthetic') return 'delab-synthetic';" ++
+      "return 'delab-preserved';" ++
+    "}" ++
+
+    "function exprStatusLabel(infos){" ++
+      "return infos.length>0?'expr-linked':'expr-missing';" ++
+    "}" ++
+
+    "function interpretationForToken(t,cands,infos){" ++
       "const hasRange=t.start!=null && t.end!=null;" ++
-      "if(t.status==='lost' && cands.length===0){" ++
-        "return 'Surface にのみ現れる leaf です。Delaborated 側に同名候補が見つからないため、括弧・hygiene・記法上の包みなど、意味表現に残らない情報の可能性があります。SourceInfo は '+(hasRange?'存在します。':'欠落しています。');" ++
+      "const primary=infos.length>0?infos[0]:null;" ++
+      "const delabStatus=delabStatusLabel(t,cands);" ++
+      "const exprStatus=exprStatusLabel(infos);" ++
+      "let parts=[];" ++
+      "if(exprStatus==='expr-linked'){" ++
+        "parts.push('この token は InfoTree 上の TermInfo に接続されています。最も近い対応は range='+primary.start+'..'+primary.end+' の '+(primary.syntax||'')+' で、expr='+(primary.expr||'')+' / type='+(primary.type||'')+' です。');" ++
+      "}else{" ++
+        "parts.push('この token の SourceInfo range に対応する TermInfo は見つかっていません。単なる構文記号、hygiene 情報、または elaboration で直接 Expr に対応しない構文要素の可能性があります。');" ++
       "}" ++
-      "if(t.status==='lost' && cands.length>0){" ++
-        "return 'Delaborated 側に似た候補はありますが、構造上の位置対応は一致していません。元 token が保存されたというより、Expr から似た表示が再構成された可能性があります。candidate score は仮説の強さであり、意味的対応の証明ではありません。';" ++
+      "if(delabStatus==='delab-missing'){" ++
+        "parts.push('一方で、Delaborated Syntax 側には同名候補が見つかっていません。これは Delab に対しては surface-only な情報で、括弧・記法上の包み・hygiene などの消失候補です。');" ++
+      "}else if(delabStatus==='delab-candidate'){" ++
+        "parts.push('Delaborated 側に似た候補はありますが、SourceInfo は '+(hasRange?'Surface 側には存在し':'Surface 側でも欠落し')+'、Delab 候補では null になりやすいです。元 token が保存されたというより、Expr から似た表示が再構成された可能性があります。');" ++
+      "}else{" ++
+        "parts.push('Delaborated 側との leaf-level candidate もあります。ただし、これは label / score に基づく候補であり、意味的対応の証明ではありません。');" ++
       "}" ++
-      "if(t.status==='preserved' && cands.length>0){" ++
-        "return 'Delaborated 側に同じ label の候補があります。leaf レベルでは保存または再出現しているように見えます。ただし、Source ↔ Expr ↔ Delab の厳密 trace はまだ取得していないため、これは候補です。';" ++
-      "}" ++
-      "if(t.status==='preserved' && cands.length===0){" ++
-        "return 'Surface 側では preserved 扱いですが、候補抽出では Delaborated leaf が見つかっていません。対応規則を改善する余地があります。';" ++
-      "}" ++
-      "if(t.status==='synthetic'){" ++
-        "return 'Delaborated 側で新たに現れた leaf です。Expr からの再構成によって追加された可能性があります。';" ++
-      "}" ++
-      "return 'この token の解釈を特定できませんでした。';" ++
+      "return parts.join(' ');" ++
     "}" ++
 
     "function tokenClass(t){return 'tok '+(t.status==='lost'?'lost':t.status==='synthetic'?'synthetic':'preserved');}" ++
@@ -291,12 +313,26 @@ def sourceViewerJs : String :=
       "});" ++
     "}" ++
 
+    "function renderInfoDetails(info,prefix){" ++
+      "let h='';" ++
+      "h+='<div class=\"kv\"><div class=\"k\">'+prefix+' range</div><div class=\"v\">'+escapeHtml(String(info.start))+'..'+escapeHtml(String(info.end))+'</div>';" ++
+      "h+='<div class=\"k\">syntax</div><div class=\"v\">'+escapeHtml(info.syntax||'')+'</div>';" ++
+      "h+='<div class=\"k\">elaborator</div><div class=\"v\">'+escapeHtml(info.elaborator||'')+'</div>';" ++
+      "h+='<div class=\"k\">expr</div><div class=\"v\">'+escapeHtml(info.expr||'')+'</div>';" ++
+      "h+='<div class=\"k\">type</div><div class=\"v\">'+escapeHtml(info.type||'')+'</div>';" ++
+      "h+='<div class=\"k\">expected</div><div class=\"v\">'+escapeHtml(info.expected||'')+'</div></div>';" ++
+      "return h;" ++
+    "}" ++
+
     "function metaHtml(t){" ++
       "const cands=candidatesForToken(t);" ++
       "const infos=termInfosForToken(t);" ++
-      "const badge='<span class=\"badge '+t.status+'\">'+t.status+'</span>';" ++
+      "const delabStatus=delabStatusLabel(t,cands);" ++
+      "const exprStatus=exprStatusLabel(infos);" ++
+      "const primary=infos.length>0?infos[0]:null;" ++
       "let h='';" ++
-      "h+=badge;" ++
+      "h+='<span class=\"badge '+(delabStatus==='delab-missing'?'delab-missing':'delab-candidate')+'\">Delab: '+escapeHtml(delabStatus)+'</span>';" ++
+      "h+='<span class=\"badge '+(exprStatus==='expr-linked'?'expr-linked':'expr-missing')+'\">Expr: '+escapeHtml(exprStatus)+'</span>';" ++
       "h+='<span class=\"rangeBadge\">'+escapeHtml(rangeText(t))+'</span>';" ++
 
       "h+='<div class=\"box\"><div class=\"boxTitle\">Surface token</div>';" ++
@@ -309,6 +345,23 @@ def sourceViewerJs : String :=
       "h+='<div class=\"k\">depth</div><div class=\"v\">'+String(t.depth)+'</div>';" ++
       "h+='<div class=\"k\">SourceInfo</div><div class=\"v\">start='+escapeHtml(String(t.start))+', end='+escapeHtml(String(t.end))+'</div></div></div>';" ++
 
+      "h+='<div class=\"box primaryBox\"><div class=\"boxTitle\">Primary Expr relation</div>';" ++
+      "if(primary==null){" ++
+        "h+='<div class=\"v\"><span class=\"warn\">No direct TermInfo found.</span><br>この token の SourceInfo range を含む TermInfo は見つかりませんでした。</div>';" ++
+      "}else{" ++
+        "h+=renderInfoDetails(primary,'primary');" ++
+      "}" ++
+      "h+='</div>';" ++
+
+      "const parents=infos.slice(1,6);" ++
+      "h+='<div class=\"box contextBox\"><div class=\"boxTitle\">Parent Expr contexts</div>';" ++
+      "if(parents.length===0){" ++
+        "h+='<div class=\"v\">No parent TermInfo contexts.</div>';" ++
+      "}else{" ++
+        "parents.forEach((info,i)=>{h+=renderInfoDetails(info,'context '+(i+1));});" ++
+      "}" ++
+      "h+='</div>';" ++
+
       "h+='<div class=\"box\"><div class=\"boxTitle\">Delaborated candidates with score</div>';" ++
       "if(cands.length===0){" ++
         "h+='<div class=\"v\">No candidate found.</div>';" ++
@@ -319,25 +372,8 @@ def sourceViewerJs : String :=
       "}" ++
       "h+='</div>';" ++
 
-      "h+='<div class=\"box\"><div class=\"boxTitle\">Expr relation from InfoTree</div>';" ++
-      "if(infos.length===0){" ++
-        "h+='<div class=\"v\"><span class=\"warn\">No TermInfo found for this token range.</span><br>この token の SourceInfo range に対応する TermInfo は見つかりませんでした。</div>';" ++
-      "}else{" ++
-        "infos.slice(0,5).forEach((info,i)=>{" ++
-          "h+='<div class=\"kv\"><div class=\"k\">info '+(i+1)+'</div><div class=\"v\">';" ++
-          "h+='range='+escapeHtml(String(info.start))+'..'+escapeHtml(String(info.end));" ++
-          "h+='<br>syntax='+escapeHtml(info.syntax||'');" ++
-          "h+='<br>elaborator='+escapeHtml(info.elaborator||'');" ++
-          "h+='<br>expr='+escapeHtml(info.expr||'');" ++
-          "h+='<br>type='+escapeHtml(info.type||'');" ++
-          "h+='<br>expected='+escapeHtml(info.expected||'');" ++
-          "h+='</div></div>';" ++
-        "});" ++
-      "}" ++
-      "h+='</div>';" ++
-
       "h+='<div class=\"box\"><div class=\"boxTitle\">Interpretation</div>';" ++
-      "h+='<div class=\"v\">'+escapeHtml(interpretationForToken(t,cands))+'</div>';" ++
+      "h+='<div class=\"v\">'+escapeHtml(interpretationForToken(t,cands,infos))+'</div>';" ++
       "h+='</div>';" ++
 
       "return h;" ++
