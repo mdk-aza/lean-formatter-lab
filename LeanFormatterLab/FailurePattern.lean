@@ -10,7 +10,6 @@ import Lean
   let fmt ← Lean.PrettyPrinter.ppTerm stx
   IO.println fmt.pretty
 
--- 今の環境では検証不可
 def test : IO Unit := do
   let p := ((#[] : Array Nat), #[1, 2])
   for x in p.2 do
