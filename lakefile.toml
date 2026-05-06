@@ -1,0 +1,22 @@
+name = "lean-formatter-lab"
+version = "0.1.0"
+keywords = ["math"]
+defaultTargets = ["LeanFormatterLab"]
+
+[leanOptions]
+pp.unicode.fun = true # pretty-prints `fun a ↦ b`
+relaxedAutoImplicit = false
+weak.linter.mathlibStandardSet = true
+
+# maxSynthPendingDepth = 3 は、型クラスの合成深さをかなり浅く制限しています。
+# もし Mathlib の複雑な構造体（複雑な代数系など）を扱った際に failed to synthesize instance というエラーが出るようなら、
+# ここをデフォルト値（通常 30 以上）に戻すか、少しずつ上げる必要があるかもしれません。
+maxSynthPendingDepth = 3
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.29.1"
+
+[[lean_lib]]
+name = "LeanFormatterLab"
